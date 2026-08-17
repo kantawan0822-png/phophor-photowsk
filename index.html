@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจองคิวถ่ายรูปติดใบ ปพ. โดยทีมโสตฯ วิเศษฯ</title>
+    <meta name="theme-color" content="#25a7f8">
+    
+    <!-- CSS & Frameworks -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Flatpickr (Thai Calendar) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700;800;900&family=Noto+Sans+Thai:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --studio-blue: #25a7f8;
+            --studio-blue-deep: #0577c5;
+            --studio-ink: #07111f;
+            --studio-muted: #64748b;
+        }
+        * { font-family: 'Anuphan', 'Noto Sans Thai', sans-serif; }
+        body {
+            background: radial-gradient(circle at 12% 6%, rgba(37,167,248,0.18) 0, transparent 34%),
+                        radial-gradient(circle at 86% 16%, rgba(125,215,255,0.20) 0, transparent 30%),
+                        linear-gradient(180deg, #ffffff 0%, #f4fbff 42%, #edf8ff 100%);
+            color: var(--studio-ink);
+        }
+        .glass {
+            background: linear-gradient(145deg, rgba(255,255,255,0.90), rgba(255,255,255,0.65));
+            border: 1px solid rgba(255,255,255,0.85);
+            box-shadow: 0 20px 50px rgba(15, 55, 90, 0.08);
+            backdrop-filter: blur(20px);
+        }
+        .glass-dark {
+            background: linear-gradient(145deg, rgba(255,255,255,0.95), rgba(240,249,255,0.85));
+            border: 1px solid rgba(37,167,248,0.20);
+            box-shadow: 0 25px 60px rgba(15, 55, 90, 0.12);
+            backdrop-filter: blur(25px);
+        }
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(7, 17, 31, 0.45);
+            backdrop-filter: blur(12px); z-index: 100; display: none;
+            align-items: center; justify-content: center; padding: 1rem; opacity: 0; transition: opacity 0.25s ease;
+        }
+        .modal-overlay.active { display: flex; opacity: 1; }
+        .modal-content { max-height: 90vh; overflow-y: auto; }
+        
+        /* Workflow Rail */
+        .status-track { display: grid; grid-template-columns: repeat(var(--steps, 7), minmax(0, 1fr)); gap: 6px; position: relative; }
+        .status-track::before { content: ""; position: absolute; left: 5%; right: 5%; top: 16px; height: 3px; background: rgba(148,163,184,0.25); z-index: 0; }
+        .status-step { position: relative; z-index: 1; text-align: center; }
+        .status-dot { width: 34px; height: 34px; border-radius: 999px; margin: 0 auto 6px; display: grid; place-items: center; font-size: 0.75rem; font-weight: 900; background: #fff; color: #94a3b8; border: 2px solid rgba(148,163,184,0.3); }
+        .status-step.done .status-dot, .status-step.current .status-dot { background: linear-gradient(135deg, #25a7f8, #0577c5); color: #fff; border-color: transparent; box-shadow: 0 8px 20px rgba(37,167,248,0.3); }
+        .status-step.current .status-dot { outline: 4px solid rgba(37,167,248,0.18); }
+        .status-label { display: block; font-size: 0.65rem; font-weight: 800; color: #64748b; }
+        .status-step.done .status-label, .status-step.current .status-label { color: #07111f; }
+
+        .admin-tab { cursor: pointer; padding: 0.75rem 1.25rem; font-weight: 800; border-radius: 1rem; color: #64748b; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem; }
+        .admin-tab.active { background: #07111f; color: #fff; }
+    </style>
+</head>
+<body class="h-full flex flex-col relative overflow-x-hidden">
+
+    <!-- Top Navigation -->
+    <nav class="fixed top-0 w-full z-50 px-4 pt-3 transition-all duration-300" id="navbar">
+        <div class="max-w-7xl mx-auto glass rounded-full p-2.5 px-6 flex justify-between items-center">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.__sodGoHomeOrTop()">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-900 to-sky-500 text-white flex items-center justify-center font-black text-xl shadow-md">
+                    W
+                </div>
+                <div>
+                    <h1 class="text-base md:text-lg font-black text-slate-900 leading-none">ระบบจองคิวถ่ายรูป ปพ.</h1>
+                    <span class="text-[10px] font-bold text-sky-600 tracking-wider">ทีมโสตฯ วิเศษสมุทรคุณ</span>
+                </div>
+            </div>
+            
+            <div id="navRightSide" class="flex items-center gap-3">
+                <button id="topCartBtn" onclick="window.handleTopCartOpen()" class="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-full font-black text-xs shadow-md hover:bg-slate-800 transition">
+                    <i class="fa-solid fa-cart-shopping text-sky-400"></i>
+                    <span>ตะกร้า</span>
+                    <span id="topCartTotalCount" class="bg-rose-500 text-white px-2 py-0.5 rounded-full text-[10px]">0</span>
+                    <span class="hidden sm:inline font-bold ml-1"><span id="topCartTotalPrice">0</span> ฿</span>
+                </button>
+
+                <button id="navLoginBtn" onclick="document.getElementById('loginModal').classList.add('active')" class="bg-sky-600 hover:bg-sky-500 text-white px-5 py-2 rounded-full text-xs font-bold shadow-md transition flex items-center gap-2">
+                    <i data-lucide="log-in" class="w-4 h-4"></i> เข้าสู่ระบบ
+                </button>
+
+                <div id="userNav" class="hidden flex items-center gap-2 bg-white/90 pl-1 pr-3 py-1 rounded-full shadow-sm border border-sky-100">
+                    <img id="navAvatar" src="" class="w-7 h-7 rounded-full border border-sky-200" alt="Profile">
+                    <span id="navName" class="text-xs font-bold text-slate-800 hidden md:block max-w-[140px] truncate"></span>
+                    <button id="navAdminDashboardBtn" onclick="window.toggleAdminDashboard()" class="hidden text-sky-600 hover:text-sky-800 p-1 ml-1" title="สลับหน้า Admin/ลูกค้า"><i data-lucide="layout-dashboard" class="w-4 h-4"></i></button>
+                    <button id="logoutBtn" class="text-slate-400 hover:text-red-500 p-1" title="ออกจากระบบ"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Modal Login -->
+    <div id="loginModal" class="modal-overlay">
+        <div class="modal-content glass-dark p-8 rounded-[2.5rem] shadow-2xl max-w-sm w-full text-center relative border border-white">
+            <button onclick="closeModal('loginModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div class="w-20 h-20 bg-sky-100 rounded-3xl flex items-center justify-center mx-auto mb-4 text-sky-600">
+                <i data-lucide="camera" class="w-10 h-10"></i>
+            </div>
+            <h2 class="text-2xl font-black mb-1 text-slate-900">เข้าสู่ระบบ</h2>
+            <p class="text-slate-500 text-xs mb-6">เพื่อจองคิวถ่ายรูป หรือตรวจสอบสถานะคำสั่งซื้อ</p>
+            <button id="loginBtn" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg shadow-sky-500/25 transition flex items-center justify-center gap-2">
+                <i data-lucide="mail" class="w-5 h-5"></i> ดำเนินการต่อด้วย Google
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Body Area -->
+    <main class="flex-1 w-full mt-24 pb-20 relative z-10">
+        
+        <div id="loadingSec" class="text-center py-20 hidden">
+            <i data-lucide="loader-2" class="w-10 h-10 animate-spin mx-auto text-sky-500 mb-3"></i>
+            <p class="font-bold text-sky-900 text-base">กำลังโหลดข้อมูลระบบ...</p>
+        </div>
+
+        <!-- 1. หน้าแรก (Public Hero & Products) -->
+        <section id="publicPackagesSec" class="max-w-7xl mx-auto px-4 space-y-10">
+            <div class="glass p-8 md:p-14 rounded-[3rem] text-center max-w-4xl mx-auto border-white shadow-xl mt-4">
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sky-100 text-sky-700 text-xs font-black mb-4">
+                    <i class="fa-solid fa-camera"></i> SOD WSK PHOTO SERVICE
+                </span>
+                <h1 class="text-4xl md:text-6xl font-black text-slate-950 tracking-tight leading-none mb-4">
+                    จองคิวถ่ายรูปติดบัตร & ใบ ปพ.
+                </h1>
+                <p class="text-slate-600 text-sm md:text-base font-semibold max-w-xl mx-auto mb-8 leading-relaxed">
+                    ระบบจองบริการถ่ายภาพนักเรียนและบุคลากร: เลือกแพ็กเกจ นัดวันเข้าถ่าย ติดตามสถานะงานภาพ และรับลิงก์ไฟล์ได้ทันที
+                </p>
+                <div class="flex flex-wrap justify-center gap-3">
+                    <button onclick="document.getElementById('productGrid')?.scrollIntoView({behavior:'smooth'})" class="bg-sky-600 hover:bg-sky-500 text-white font-black px-6 py-3 rounded-2xl shadow-lg transition">
+                        <i class="fa-solid fa-bag-shopping mr-1"></i> เลือกแพ็กเกจสินค้า
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass p-8 rounded-[2.5rem] border-white shadow-lg">
+                <div class="flex items-center gap-3 mb-6 border-b border-sky-100 pb-4">
+                    <div class="p-2.5 bg-sky-100 text-sky-600 rounded-xl"><i data-lucide="package" class="w-6 h-6"></i></div>
+                    <h3 class="font-black text-2xl text-slate-900">แพ็กเกจบริการถ่ายภาพ</h3>
+                </div>
+                <div id="productGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+            </div>
+        </section>
+
+        <!-- 2. หน้าหลักลูกค้า (Customer Dashboard) -->
+        <section id="customerDashboardSec" class="hidden max-w-7xl mx-auto px-4 space-y-8">
+            <div class="glass-dark rounded-[2.5rem] p-6 md:p-8 shadow-xl border-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <span class="text-xs font-black text-sky-600 uppercase tracking-wider">ข้อมูลผู้ใช้</span>
+                    <h2 class="text-3xl font-black text-slate-950 mb-3" id="welcomeUser">ยินดีต้อนรับ</h2>
+                    <div class="flex flex-wrap gap-2" id="studentBadges">
+                        <span class="bg-white px-3 py-1.5 rounded-xl border border-sky-100 text-xs font-bold text-slate-700 shadow-sm flex items-center gap-1.5">
+                            <i data-lucide="id-card" class="w-3.5 h-3.5 text-sky-500"></i> รหัส: <span id="userSidBadge">-</span>
+                        </span>
+                        <span class="bg-white px-3 py-1.5 rounded-xl border border-sky-100 text-xs font-bold text-slate-700 shadow-sm flex items-center gap-1.5">
+                            <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-sky-500"></i> ชั้น: <span id="userClassBadge">-</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                    <button onclick="window.showPage('orders', 'all')" class="flex-1 md:flex-none bg-sky-600 hover:bg-sky-500 text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2">
+                        <i data-lucide="list-checks" class="w-4 h-4"></i> รายการของฉัน
+                    </button>
+                    <button onclick="window.openEditProfileModal()" class="flex-1 md:flex-none bg-white border border-sky-100 text-slate-700 hover:bg-sky-50 px-4 py-3 rounded-2xl font-bold text-sm shadow-sm transition flex items-center justify-center gap-2">
+                        <i data-lucide="user-cog" class="w-4 h-4"></i> แก้ไขข้อมูล
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass p-8 rounded-[2.5rem] border-white shadow-lg">
+                <div class="flex items-center gap-3 mb-6 border-b border-sky-100 pb-4">
+                    <div class="p-2.5 bg-sky-100 text-sky-600 rounded-xl"><i data-lucide="camera" class="w-6 h-6"></i></div>
+                    <h3 class="font-black text-2xl text-slate-900">เลือกแพ็กเกจถ่ายภาพ</h3>
+                </div>
+                <div id="customerProductGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+            </div>
+        </section>
+
+        <!-- 3. หน้ารายการคำสั่งซื้อของฉัน (My Orders) -->
+        <section id="myOrdersSec" class="hidden max-w-7xl mx-auto px-4 space-y-6">
+            <button onclick="window.showPage('home')" class="flex items-center gap-2 text-sky-700 hover:text-sky-900 font-bold bg-white px-4 py-2 rounded-full border border-sky-100 shadow-sm text-sm">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> กลับหน้าหลัก
+            </button>
+
+            <div class="glass p-6 md:p-8 rounded-[2.5rem] border-white shadow-lg">
+                <h3 class="font-black text-2xl text-slate-900 mb-6 flex items-center gap-2">
+                    <i data-lucide="clipboard-list" class="text-sky-600"></i> ติดตามคำสั่งซื้อและสถานะงานภาพ
+                </h3>
+
+                <div class="flex flex-wrap gap-2 mb-6">
+                    <button onclick="window.filterMyOrders('active')" id="tab-active" class="px-5 py-2 rounded-full font-bold text-xs bg-slate-900 text-white shadow-sm">กำลังดำเนินการ (<span id="count-active">0</span>)</button>
+                    <button onclick="window.filterMyOrders('all')" id="tab-all" class="px-5 py-2 rounded-full font-bold text-xs bg-slate-100 text-slate-600 hover:bg-slate-200">ทั้งหมด (<span id="count-all">0</span>)</button>
+                </div>
+
+                <div id="myOrdersList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+        </section>
+
+        <!-- 4. หน้าลงทะเบียนโปรไฟล์ลูกค้าใหม่ (Profile Form) -->
+        <section id="profileSec" class="hidden max-w-2xl mx-auto px-4">
+            <div class="glass-dark p-8 md:p-10 rounded-[2.5rem] shadow-2xl border-white">
+                <h2 class="text-2xl font-black text-slate-900 mb-2 flex items-center gap-2">
+                    <i data-lucide="user-plus" class="text-sky-600"></i> บันทึกข้อมูลโปรไฟล์
+                </h2>
+                <p class="text-xs text-slate-500 mb-6 font-semibold">กรุณากรอกข้อมูลส่วนตัวเพื่อใช้ในการออกใบเสร็จและจัดคิวถ่ายรูป</p>
+
+                <form id="profileForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="text-xs font-bold text-slate-700">ชื่อ-นามสกุล <span class="text-rose-500">*</span></label>
+                        <input type="text" id="p_name" required class="w-full p-3.5 bg-white border border-sky-100 rounded-xl outline-none focus:border-sky-500 font-bold text-sm shadow-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">สถานะผู้ใช้ <span class="text-rose-500">*</span></label>
+                        <select id="p_class" onchange="window.toggleStudentFields('p_class', 'p_sid', 'p_room')" class="w-full p-3.5 bg-white border border-sky-100 rounded-xl outline-none focus:border-sky-500 font-bold text-sm shadow-sm">
+                            <option value="1">นักเรียน ม.1</option>
+                            <option value="2">นักเรียน ม.2</option>
+                            <option value="3">นักเรียน ม.3</option>
+                            <option value="4">นักเรียน ม.4</option>
+                            <option value="5">นักเรียน ม.5</option>
+                            <option value="6">นักเรียน ม.6</option>
+                            <option value="educator">ครู / บุคลากร</option>
+                            <option value="alumni">ศิษย์เก่า</option>
+                            <option value="external">บุคคลภายนอก</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">รหัสนักเรียน (5 หลัก)</label>
+                        <input type="number" id="p_sid" placeholder="เช่น 12345" class="w-full p-3.5 bg-white border border-sky-100 rounded-xl outline-none focus:border-sky-500 font-bold text-sm shadow-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">ห้องเรียน</label>
+                        <input type="number" id="p_room" placeholder="เช่น 1" class="w-full p-3.5 bg-white border border-sky-100 rounded-xl outline-none focus:border-sky-500 font-bold text-sm shadow-sm">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-slate-700">เบอร์โทรศัพท์ <span class="text-rose-500">*</span></label>
+                        <input type="tel" id="p_phone" required placeholder="08X-XXX-XXXX" class="w-full p-3.5 bg-white border border-sky-100 rounded-xl outline-none focus:border-sky-500 font-bold text-sm shadow-sm">
+                    </div>
+                    
+                    <button type="submit" id="btnSaveProfile" class="md:col-span-2 w-full bg-sky-600 hover:bg-sky-500 text-white font-black py-4 rounded-xl shadow-lg mt-4 transition">
+                        บันทึกข้อมูลและเริ่มต้นใช้งาน
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 5. หน้า Admin Dashboard (Firestore Only) -->
+        <section id="adminSec" class="hidden max-w-7xl mx-auto px-4 space-y-6">
+            <div class="glass-dark p-6 md:p-8 rounded-[2.5rem] shadow-xl border-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                    <span class="text-xs font-black text-rose-600 uppercase tracking-widest flex items-center gap-1"><i data-lucide="shield"></i> Admin Center</span>
+                    <h2 class="text-2xl md:text-3xl font-black text-slate-900">แผงควบคุมระบบโสตฯ</h2>
+                    <p id="adminEmailLabel" class="text-xs font-bold text-slate-500 mt-1"></p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="window.openAdminWalkInModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center gap-1.5"><i data-lucide="shopping-bag" class="w-4 h-4"></i> สั่งซื้อ Walk-in</button>
+                    <button onclick="document.getElementById('manageProductModal').classList.add('active')" class="bg-pink-600 hover:bg-pink-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center gap-1.5"><i data-lucide="package" class="w-4 h-4"></i> จัดการสินค้า</button>
+                    <button onclick="document.getElementById('manageStaffModal').classList.add('active')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center gap-1.5"><i data-lucide="users" class="w-4 h-4"></i> ผู้รับเงิน</button>
+                    <button onclick="window.openPopupSettingsModal()" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center gap-1.5"><i data-lucide="megaphone" class="w-4 h-4"></i> ประกาศ</button>
+                    <button onclick="window.exportToExcel()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center gap-1.5"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> สรุป Excel</button>
+                    <button onclick="window.toggleAdminDashboard()" class="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm"><i data-lucide="user" class="w-4 h-4 inline"></i> ลูกค้า</button>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div class="glass p-5 rounded-3xl border-white shadow-sm">
+                    <p class="text-xs font-bold text-slate-500 mb-1">รายรับทั้งหมด (บาท)</p>
+                    <h4 class="text-3xl font-black text-emerald-600" id="statRev">0</h4>
+                </div>
+                <div class="glass p-5 rounded-3xl border-white shadow-sm">
+                    <p class="text-xs font-bold text-slate-500 mb-1">คิวถ่ายรูปวันนี้</p>
+                    <h4 class="text-3xl font-black text-sky-600" id="statToday">0</h4>
+                </div>
+                <div class="glass p-5 rounded-3xl border-white shadow-sm">
+                    <p class="text-xs font-bold text-slate-500 mb-1">รอชำระเงิน</p>
+                    <h4 class="text-3xl font-black text-amber-600" id="statWait">0</h4>
+                </div>
+                <div class="glass p-5 rounded-3xl border-white shadow-sm">
+                    <p class="text-xs font-bold text-slate-500 mb-1">ออกใบเสร็จแล้ว</p>
+                    <h4 class="text-3xl font-black text-indigo-600" id="statReceipt">0</h4>
+                </div>
+            </div>
+
+            <!-- Management Table -->
+            <div class="glass-dark p-6 rounded-[2.5rem] shadow-xl border-white">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div class="flex bg-slate-100 p-1 rounded-2xl">
+                        <button id="tabBtnQueue" onclick="window.switchAdminTab('queue')" class="admin-tab active text-xs"><i data-lucide="calendar" class="w-4 h-4"></i> คิวถ่ายรูป & ขั้นตอนงานภาพ</button>
+                        <button id="tabBtnPayment" onclick="window.switchAdminTab('payment')" class="admin-tab text-xs"><i data-lucide="credit-card" class="w-4 h-4"></i> รับชำระเงิน & แนบลิงก์งาน</button>
+                    </div>
+
+                    <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-sky-100">
+                        <span class="text-xs font-bold text-slate-600">ผู้รับเงิน:</span>
+                        <select id="activeStaffSelect" class="text-xs font-bold text-slate-800 outline-none cursor-pointer bg-transparent">
+                            <option value="">-- กรุณาเลือก --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table Queue -->
+                <div id="adminTabQueue" class="overflow-x-auto rounded-2xl border border-sky-100 bg-white">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="bg-sky-50 text-sky-900 border-b border-sky-100 font-bold">
+                            <tr>
+                                <th class="p-3.5">วันนัดถ่าย</th>
+                                <th class="p-3.5">ข้อมูลลูกค้า</th>
+                                <th class="p-3.5">แพ็กเกจ</th>
+                                <th class="p-3.5 text-center">ขั้นตอนความก้าวหน้า</th>
+                                <th class="p-3.5 text-right">แก้ไข/ลบ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adm_queueTable" class="divide-y divide-sky-50"></tbody>
+                    </table>
+                </div>
+
+                <!-- Table Payment -->
+                <div id="adminTabPayment" class="hidden overflow-x-auto rounded-2xl border border-sky-100 bg-white">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="bg-pink-50 text-pink-900 border-b border-pink-100 font-bold">
+                            <tr>
+                                <th class="p-3.5">ข้อมูลลูกค้า</th>
+                                <th class="p-3.5">ยอดชำระ</th>
+                                <th class="p-3.5 text-center">สถานะการจ่าย</th>
+                                <th class="p-3.5 text-right">การเงิน / แนบลิงก์ Drive</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adm_payTable" class="divide-y divide-sky-50"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Booking Confirmation -->
+    <div id="bookingModal" class="modal-overlay">
+        <div class="modal-content glass-dark text-slate-900 max-w-md w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white">
+            <button onclick="closeModal('bookingModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-2xl font-black mb-1">ยืนยันคำสั่งซื้อ</h2>
+            <p class="text-xs text-slate-500 mb-5 font-bold">ตรวจสอบรายการและเลือกวันนัดถ่ายภาพ</p>
+
+            <div id="modalProdInfo" class="mb-5"></div>
+            
+            <div class="space-y-4">
+                <div id="dateSection">
+                    <label class="block text-xs font-bold text-slate-700 mb-1.5"><i data-lucide="calendar" class="w-4 h-4 inline text-sky-600"></i> เลือกวันนัดถ่ายรูป (จันทร์, พุธ, ศุกร์)</label>
+                    <input type="text" id="bookDate" placeholder="เลือกวันที่ (วว/ดด/ปปปป)" class="w-full p-3.5 bg-white border border-sky-100 rounded-xl outline-none focus:border-sky-500 text-sm font-bold shadow-sm cursor-pointer">
+                </div>
+
+                <div class="border-t border-sky-100 pt-4 flex justify-between items-center">
+                    <span class="font-bold text-slate-500 text-sm">ยอดชำระสุทธิ</span>
+                    <span id="modalTotal" class="text-3xl font-black text-sky-600">0 ฿</span>
+                </div>
+
+                <button id="confirmBtn" class="w-full bg-sky-600 hover:bg-sky-500 text-white py-4 rounded-2xl font-black shadow-lg transition">ยืนยันการจองคิว</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Evidence (html2canvas) -->
+    <div id="bookingSuccessModal" class="modal-overlay">
+        <div class="modal-content glass-dark max-w-md w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white text-center">
+            <div id="captureArea" class="bg-white p-6 rounded-[2rem] border border-sky-100 mb-5 text-left">
+                <div class="text-center border-b border-slate-100 pb-3 mb-3">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-2"><i data-lucide="check-circle" class="w-7 h-7"></i></div>
+                    <h3 class="font-black text-xl text-slate-900">จองคิวสำเร็จ!</h3>
+                    <p class="text-[10px] font-bold text-slate-400 tracking-wider uppercase">หลักฐานการสั่งซื้อ</p>
+                </div>
+                <div class="space-y-2 text-xs font-semibold">
+                    <div class="flex justify-between"><span class="text-slate-400">ผู้สั่งซื้อ:</span><span class="font-bold text-slate-800" id="ev_name">-</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">รายการ:</span><span class="font-bold text-slate-800" id="ev_item">-</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">วันนัดถ่าย:</span><span class="font-bold text-sky-600" id="ev_date">-</span></div>
+                    <div class="flex justify-between border-t border-dashed border-slate-200 pt-2"><span class="font-black text-sm">ยอดรวม:</span><span class="font-black text-xl text-sky-600" id="ev_price">0 ฿</span></div>
+                </div>
+                <div class="mt-4 bg-amber-50 p-2.5 rounded-xl border border-amber-100 text-center">
+                    <p class="text-[11px] font-bold text-amber-800">** กรุณาบันทึกภาพหน้าจอส่งใน LINE เพื่อยืนยันคิว **</p>
+                </div>
+            </div>
+
+            <div class="space-y-2.5">
+                <button onclick="window.captureAndSave()" class="w-full bg-sky-600 hover:bg-sky-500 text-white py-3.5 rounded-xl font-black text-sm shadow-md transition flex items-center justify-center gap-2">
+                    <i data-lucide="camera" class="w-4 h-4"></i> เซฟรูปภาพหลักฐาน
+                </button>
+                <a href="https://lin.ee/v8GoR8q" target="_blank" class="w-full bg-[#06C755] hover:opacity-90 text-white py-3.5 rounded-xl font-black text-sm shadow-md flex items-center justify-center gap-2 transition">
+                    <i class="fa-brands fa-line text-lg"></i> ส่งหลักฐานใน LINE
+                </a>
+                <button onclick="closeModal('bookingSuccessModal'); window.showPage('orders', 'all');" class="text-xs font-bold text-slate-400 hover:text-slate-700 py-1">ไปหน้ารายการของฉัน</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Walk-in POS (Admin) -->
+    <div id="adminWalkInModal" class="modal-overlay">
+        <div class="modal-content glass-dark max-w-3xl w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white">
+            <button onclick="closeModal('adminWalkInModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-2xl font-black mb-1 text-emerald-950 flex items-center gap-2"><i data-lucide="shopping-bag" class="text-emerald-600"></i> สั่งซื้อ Walk-in หน้างาน</h2>
+            <p class="text-xs text-slate-500 mb-6 font-bold">บันทึกรายการสำหรับลูกค้าหน้าร้าน และออกเลขที่ใบเสร็จทันที</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-3 bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm">
+                    <h4 class="font-bold text-xs text-emerald-800">1. ข้อมูลลูกค้า</h4>
+                    <input type="text" id="walkin_name" placeholder="ชื่อ-นามสกุลลูกค้า *" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-emerald-500">
+                    <input type="email" id="walkin_email" placeholder="อีเมล (เพื่อผูกบัญชีเมื่อลูกค้า Login) *" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-emerald-500">
+                    <input type="tel" id="walkin_phone" placeholder="เบอร์โทรศัพท์" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-emerald-500">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="walkin_sid" placeholder="รหัสนักเรียน" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none">
+                        <input type="text" id="walkin_class" placeholder="ชั้น/ห้อง (เช่น ม.6/1)" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none">
+                    </div>
+                </div>
+
+                <div class="space-y-3 bg-white p-5 rounded-2xl border border-emerald-100 shadow-sm">
+                    <h4 class="font-bold text-xs text-emerald-800">2. รายการสินค้า & การเงิน</h4>
+                    <div class="flex gap-2">
+                        <select id="walkin_prod_select" class="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"></select>
+                        <button onclick="window.addWalkInProduct()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 rounded-xl text-xs font-bold"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                    </div>
+                    <div id="walkinCartList" class="max-h-32 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded-xl border border-slate-100 text-xs"></div>
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                        <span class="font-bold text-slate-500 text-xs">ยอดรวม:</span>
+                        <span class="text-2xl font-black text-emerald-600"><span id="walkinTotal">0</span> ฿</span>
+                    </div>
+                    <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer pt-1">
+                        <input type="checkbox" id="walkin_paid" checked class="w-4 h-4 text-emerald-600 rounded"> รับชำระเงินและออกใบเสร็จทันที
+                    </label>
+                    <button onclick="window.submitWalkInBooking()" id="btnCreateWalkIn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md transition mt-2">
+                        บันทึกคำสั่งซื้อ Walk-in
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal View Booking & Drive Link -->
+    <div id="viewBookingModal" class="modal-overlay">
+        <div class="modal-content glass-dark max-w-md w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white">
+            <button onclick="closeModal('viewBookingModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-xl font-black mb-4 flex items-center gap-2"><i data-lucide="info" class="text-sky-600"></i> รายละเอียดคำสั่งซื้อ</h2>
+            <div id="viewBookingContent" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Modal Manage Products (Text Only) -->
+    <div id="manageProductModal" class="modal-overlay">
+        <div class="modal-content glass-dark max-w-xl w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white">
+            <button onclick="closeModal('manageProductModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-2xl font-black mb-1 text-pink-950 flex items-center gap-2"><i data-lucide="package" class="text-pink-600"></i> จัดการแพ็กเกจสินค้า</h2>
+            <p class="text-xs text-slate-500 mb-6 font-bold">เพิ่ม/แก้ไขสินค้า (บันทึกเฉพาะชื่อ รายละเอียด และราคาลง Firestore)</p>
+
+            <div class="space-y-3 bg-white p-5 rounded-2xl border border-pink-100 mb-6 shadow-sm">
+                <input type="text" id="adm_pname" placeholder="ชื่อแพ็กเกจสินค้า *" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-pink-500">
+                <input type="text" id="adm_pdesc" placeholder="รายละเอียด / จำนวนรูป / ของแถม" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-pink-500">
+                <input type="number" id="adm_pprice" placeholder="ราคา (บาท) *" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-pink-500">
+                <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer pt-1">
+                    <input type="checkbox" id="adm_isCombo" class="w-4 h-4 text-pink-600 rounded"> กำหนดเป็น Combo Set (ชุดโปรโมชั่น)
+                </label>
+                <button onclick="window.addProductAdmin()" class="w-full bg-pink-600 hover:bg-pink-500 text-white py-3 rounded-xl font-black text-xs shadow-md transition">
+                    + เพิ่มสินค้าลงระบบ
+                </button>
+            </div>
+
+            <h4 class="font-bold text-xs text-slate-600 mb-2">รายการสินค้าปัจจุบัน</h4>
+            <div id="adm_pList" class="space-y-2 max-h-56 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- Modal Manage Staffs (Text Only) -->
+    <div id="manageStaffModal" class="modal-overlay">
+        <div class="modal-content glass-dark max-w-md w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white">
+            <button onclick="closeModal('manageStaffModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-2xl font-black mb-1 text-indigo-950 flex items-center gap-2"><i data-lucide="users" class="text-indigo-600"></i> จัดการรายชื่อผู้รับเงิน</h2>
+            <p class="text-xs text-slate-500 mb-5 font-bold">บันทึกชื่อเจ้าหน้าที่เพื่อเลือกลงในใบเสร็จ</p>
+
+            <div class="space-y-3 bg-white p-5 rounded-2xl border border-indigo-100 mb-5 shadow-sm">
+                <input type="text" id="adm_staff_name" placeholder="ชื่อ-นามสกุล เจ้าหน้าที่ *" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500">
+                <button onclick="window.addStaffAdmin()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl font-black text-xs shadow-md transition">
+                    + เพิ่มรายชื่อเจ้าหน้าที่
+                </button>
+            </div>
+            <div id="adm_staffList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- Modal Text Announcement (Pop-up) -->
+    <div id="welcomePopupModal" class="modal-overlay">
+        <div class="modal-content bg-white text-slate-900 max-w-md w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-sky-100 text-center">
+            <button onclick="closeModal('welcomePopupModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="megaphone" class="w-8 h-8"></i>
+            </div>
+            <h3 id="popupTextTitle" class="text-2xl font-black text-slate-900 mb-2">ประกาศจากทีมโสตฯ</h3>
+            <p id="popupTextMessage" class="text-xs text-slate-600 font-semibold leading-relaxed mb-6"></p>
+            <button onclick="closeModal('welcomePopupModal')" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3.5 rounded-2xl font-black text-xs transition">
+                รับทราบ
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Settings Announcement (Admin) -->
+    <div id="popupSettingsModal" class="modal-overlay">
+        <div class="modal-content glass-dark max-w-md w-full p-8 rounded-[2.5rem] relative shadow-2xl border border-white">
+            <button onclick="closeModal('popupSettingsModal')" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <h2 class="text-2xl font-black mb-1 text-amber-950 flex items-center gap-2"><i data-lucide="megaphone" class="text-amber-600"></i> ตั้งค่าข้อความประกาศ</h2>
+            <p class="text-xs text-slate-500 mb-5 font-bold">แก้ไขข้อความ Popup ที่จะแจ้งเตือนลูกค้าหน้าแรก</p>
+
+            <div class="space-y-3 bg-white p-5 rounded-2xl border border-amber-100 shadow-sm">
+                <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input type="checkbox" id="pop_enabled" class="w-4 h-4 text-amber-600 rounded"> เปิดแสดง Popup หน้าแรก
+                </label>
+                <input type="text" id="pop_title" placeholder="หัวข้อประกาศ" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500">
+                <textarea id="pop_msg" rows="4" placeholder="ข้อความรายละเอียดประกาศ..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500"></textarea>
+                <button onclick="window.savePopupSettingsAdmin()" class="w-full bg-amber-600 hover:bg-amber-500 text-white py-3.5 rounded-xl font-black text-xs shadow-md transition">
+                    บันทึกประกาศ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript & Logic (Firebase Auth + Firestore Only) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, query, orderBy, where, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // Firebase Configuration (Firestore & Auth Only)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDks199qQ7IA-6Z7OwRbBY_zyjhJe-7e7k",
+            authDomain: "phophor-photowsk.firebaseapp.com",
+            projectId: "phophor-photowsk",
+            storageBucket: "phophor-photowsk.firebasestorage.app",
+            messagingSenderId: "648800761624",
+            appId: "1:648800761624:web:b468af3219db8f2e81106d"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        const ADMIN_EMAIL = "sod.wiset@wsk.ac.th";
+        const SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwCExx3fca5Fu4trfq0pDqw8HYPueuOKTpPTB_0H_1kP0S7NNDeUOlPfT2oXMpk7CdxZg/exec";
+
+        let userProfile = null;
+        let cart = [];
+        let allUserOrders = [];
+        let bookDatePicker = null;
+        let walkInCart = [];
+        let currentProducts = [];
+
+        const WORKFLOW_STEPS = [
+            { step: 1, label: 'สั่งสินค้า' },
+            { step: 2, label: 'จองวันถ่าย' },
+            { step: 3, label: 'ถ่ายภาพแล้ว' },
+            { step: 4, label: 'กำลังแต่งภาพ' },
+            { step: 5, label: 'สั่งร้านปริ้นภาพ' },
+            { step: 6, label: 'พร้อมส่งภาพ' },
+            { step: 7, label: 'รับภาพแล้ว' }
+        ];
+
+        function renderIcons() {
+            try { lucide.createIcons(); } catch(e) {}
+        }
+        window.closeModal = (id) => document.getElementById(id)?.classList.remove('active');
+
+        // Global Navigation
+        window.__sodGoHomeOrTop = () => {
+            if(userProfile && !window.currentUserIsAdmin) window.showPage('home');
+            else window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // Flatpickr Init (Mon, Wed, Fri + Thai BE Year)
+        window.addEventListener('DOMContentLoaded', () => {
+            renderIcons();
+            loadPublicProducts();
+            loadWelcomePopup();
+
+            if(typeof flatpickr === 'function') {
+                bookDatePicker = flatpickr("#bookDate", {
+                    locale: "th",
+                    altInput: true,
+                    altFormat: "j M Y",
+                    dateFormat: "Y-m-d",
+                    disable: [
+                        function(date) {
+                            return (date.getDay() === 0 || date.getDay() === 2 || date.getDay() === 4 || date.getDay() === 6);
+                        }
+                    ],
+                    formatDate: (date, format, locale) => {
+                        const d = date.getDate();
+                        const m = locale.months.shorthand[date.getMonth()];
+                        const y = date.getFullYear() + 543;
+                        return `${d} ${m} ${y}`;
+                    }
+                });
+            }
+        });
+
+        // 1. Auth Listener & Routing
+        onAuthStateChanged(auth, async (user) => {
+            document.getElementById('loginModal')?.classList.remove('active');
+            if(user) {
+                document.getElementById('navLoginBtn')?.classList.add('hidden');
+                document.getElementById('userNav')?.classList.remove('hidden');
+                document.getElementById('navName').innerText = user.displayName;
+                document.getElementById('navAvatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName)}&background=e0f2fe&color=0284c7`;
+                document.getElementById('publicPackagesSec')?.classList.add('hidden');
+
+                const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+                window.currentUserIsAdmin = isAdmin;
+
+                if(isAdmin) {
+                    document.getElementById('adminSec')?.classList.remove('hidden');
+                    document.getElementById('navAdminDashboardBtn')?.classList.remove('hidden');
+                    document.getElementById('adminEmailLabel').innerText = user.email;
+                    window.loadAdminData();
+                    return;
+                }
+
+                // Customer Load
+                try {
+                    const uDoc = await getDoc(doc(db, "users", user.uid));
+                    if(uDoc.exists()) {
+                        userProfile = uDoc.data();
+                        window.renderCustomerHome();
+                    } else {
+                        document.getElementById('profileSec')?.classList.remove('hidden');
+                        document.getElementById('p_name').value = user.displayName;
+                    }
+                } catch(e) {
+                    console.error("User Load Error:", e);
+                }
+            } else {
+                window.currentUserIsAdmin = false;
+                document.getElementById('navLoginBtn')?.classList.remove('hidden');
+                document.getElementById('userNav')?.classList.add('hidden');
+                ['profileSec', 'customerDashboardSec', 'adminSec', 'myOrdersSec'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+                document.getElementById('publicPackagesSec')?.classList.remove('hidden');
+                loadPublicProducts();
+            }
+            renderIcons();
+        });
+
+        document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
+        document.getElementById('logoutBtn').onclick = () => signOut(auth);
+
+        // 2. Profile Creation
+        document.getElementById('profileForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnSaveProfile');
+            btn.disabled = true; btn.innerText = "กำลังบันทึก...";
+            try {
+                const baseClass = document.getElementById('p_class').value;
+                const baseYear = new Date().getFullYear();
+                await setDoc(doc(db, "users", auth.currentUser.uid), {
+                    fullName: document.getElementById('p_name').value.trim(),
+                    studentId: document.getElementById('p_sid').value.trim() || '-',
+                    baseClass: baseClass,
+                    baseYear: baseYear,
+                    room: document.getElementById('p_room').value.trim() || '-',
+                    phone: document.getElementById('p_phone').value.trim(),
+                    email: auth.currentUser.email,
+                    createdAt: serverTimestamp()
+                });
+                location.reload();
+            } catch(e) {
+                alert("เกิดข้อผิดพลาด: " + e.message);
+                btn.disabled = false; btn.innerText = "บันทึกข้อมูลและเริ่มต้นใช้งาน";
+            }
+        };
+
+        window.renderCustomerHome = () => {
+            ['publicPackagesSec', 'profileSec', 'adminSec', 'myOrdersSec'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            document.getElementById('customerDashboardSec')?.classList.remove('hidden');
+            
+            document.getElementById('welcomeUser').innerText = userProfile.fullName;
+            document.getElementById('userSidBadge').innerText = userProfile.studentId || "-";
+            document.getElementById('userClassBadge').innerText = userProfile.baseClass ? `ม.${userProfile.baseClass}/${userProfile.room}` : "-";
+
+            loadPublicProducts();
+            loadMyOrders();
+        };
+
+        window.showPage = (page, filter = 'active') => {
+            ['customerDashboardSec', 'myOrdersSec'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+            if(page === 'home') document.getElementById('customerDashboardSec')?.classList.remove('hidden');
+            else if(page === 'orders') {
+                document.getElementById('myOrdersSec')?.classList.remove('hidden');
+                window.filterMyOrders(filter);
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            renderIcons();
+        };
+
+        // 3. Products & Cart
+        async function loadPublicProducts() {
+            try {
+                const snap = await getDocs(query(collection(db, "products")));
+                currentProducts = [];
+                snap.forEach(d => currentProducts.push({ id: d.id, ...d.data() }));
+
+                const grids = [document.getElementById('productGrid'), document.getElementById('customerProductGrid')].filter(Boolean);
+                if(currentProducts.length === 0) {
+                    grids.forEach(g => g.innerHTML = '<div class="col-span-full py-8 text-center text-slate-400 font-bold">ยังไม่มีรายการแพ็กเกจสินค้า</div>');
+                    return;
+                }
+
+                let html = '';
+                currentProducts.forEach(p => {
+                    html += `
+                        <div class="bg-white p-6 rounded-3xl flex flex-col h-full border border-sky-100 shadow-sm hover:shadow-md transition">
+                            <div class="flex justify-between items-start mb-4">
+                                <div class="w-12 h-12 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center font-black">
+                                    <i data-lucide="camera" class="w-6 h-6"></i>
+                                </div>
+                                ${p.isCombo ? '<span class="bg-pink-100 text-pink-600 text-[10px] font-black px-2.5 py-1 rounded-full">COMBO</span>' : ''}
+                            </div>
+                            <h4 class="font-bold text-base text-slate-900 mb-1 leading-snug">${p.name}</h4>
+                            <p class="text-xs text-slate-500 mb-6 flex-1">${p.desc || '-'}</p>
+                            <div class="mt-auto flex justify-between items-center border-t border-slate-100 pt-4">
+                                <span class="text-2xl font-black text-sky-600">${p.price} <span class="text-xs font-bold text-slate-400">฿</span></span>
+                                <button onclick="window.handleCartClick('${p.id}', '${p.name.replace(/'/g, "\\'")}', ${p.price})" class="btn-add-cart bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition">
+                                    เลือกสินค้านี้
+                                </button>
+                            </div>
+                        </div>`;
+                });
+                grids.forEach(g => g.innerHTML = html);
+                renderIcons();
+                updateCartUI();
+            } catch(e) { console.error(e); }
+        }
+
+        window.handleCartClick = (id, name, price) => {
+            if(!auth.currentUser) return document.getElementById('loginModal')?.classList.add('active');
+            const idx = cart.findIndex(i => i.id === id);
+            if(idx > -1) cart.splice(idx, 1);
+            else cart.push({ id, name, price, qty: 1 });
+            updateCartUI();
+        };
+
+        function updateCartUI() {
+            const count = cart.reduce((sum, i) => sum + i.qty, 0);
+            const total = cart.reduce((sum, i) => sum + (i.price * i.qty), 0);
+            document.getElementById('topCartTotalCount').innerText = count;
+            document.getElementById('topCartTotalPrice').innerText = total.toLocaleString();
+        }
+
+        window.handleTopCartOpen = () => {
+            if(!auth.currentUser) return document.getElementById('loginModal')?.classList.add('active');
+            if(cart.length === 0) return alert("กรุณาเลือกสินค้าอย่างน้อย 1 รายการก่อนครับ");
+
+            let html = '<div class="space-y-2 bg-white p-3 rounded-2xl border border-sky-100 max-h-48 overflow-y-auto">';
+            let total = 0;
+            cart.forEach(item => {
+                total += item.price;
+                html += `
+                    <div class="flex justify-between items-center text-xs py-1.5 border-b border-slate-100 last:border-0 font-bold">
+                        <span class="text-slate-800">${item.name}</span>
+                        <span class="text-sky-600">${item.price} ฿</span>
+                    </div>`;
+            });
+            html += '</div>';
+            document.getElementById('modalProdInfo').innerHTML = html;
+            document.getElementById('modalTotal').innerText = `${total.toLocaleString()} ฿`;
+            document.getElementById('bookingModal')?.classList.add('active');
+        };
+
+        // 4. Confirm Booking
+        document.getElementById('confirmBtn').onclick = async () => {
+            const date = document.getElementById('bookDate').value;
+            if(!date) return alert("กรุณาเลือกวันนัดถ่ายรูปก่อนครับ");
+
+            const btn = document.getElementById('confirmBtn');
+            btn.disabled = true; btn.innerText = "กำลังบันทึกคำสั่งซื้อ...";
+
+            try {
+                const combinedNames = cart.map(i => i.name).join(' + ');
+                const total = cart.reduce((sum, i) => sum + i.price, 0);
+                const [y, m, d] = date.split('-');
+                const thDate = `${d}/${m}/${parseInt(y) + 543}`;
+
+                const docRef = await addDoc(collection(db, "bookings"), {
+                    userId: auth.currentUser.uid,
+                    customerName: userProfile.fullName,
+                    customerEmail: auth.currentUser.email,
+                    customerPhone: userProfile.phone || '-',
+                    studentId: userProfile.studentId || '-',
+                    studentClass: userProfile.baseClass || '-',
+                    studentRoom: userProfile.room || '-',
+                    productName: combinedNames,
+                    price: total,
+                    bookDate: thDate,
+                    status: "จองวันที่เข้าถ่ายแล้ว",
+                    workflowStep: 2,
+                    workflowLabel: "จองวันถ่าย",
+                    isPaid: false,
+                    isPhotographed: false,
+                    timestamp: serverTimestamp()
+                });
+
+                document.getElementById('ev_name').innerText = userProfile.fullName;
+                document.getElementById('ev_item').innerText = combinedNames;
+                document.getElementById('ev_date').innerText = thDate;
+                document.getElementById('ev_price').innerText = `${total.toLocaleString()} ฿`;
+
+                window.closeModal('bookingModal');
+                document.getElementById('bookingSuccessModal')?.classList.add('active');
+                cart = [];
+                updateCartUI();
+                loadMyOrders();
+            } catch(e) {
+                alert("Error: " + e.message);
+            } finally {
+                btn.disabled = false; btn.innerText = "ยืนยันการจองคิว";
+            }
+        };
+
+        window.captureAndSave = () => {
+            const el = document.getElementById('captureArea');
+            html2canvas(el, { scale: 2 }).then(canvas => {
+                const a = document.createElement('a');
+                a.download = `Booking_${Date.now()}.png`;
+                a.href = canvas.toDataURL();
+                a.click();
+            });
+        };
+
+        // 5. My Orders & Workflow
+        async function loadMyOrders() {
+            try {
+                const snap = await getDocs(query(collection(db, "bookings"), where("userId", "==", auth.currentUser.uid)));
+                allUserOrders = [];
+                snap.forEach(d => allUserOrders.push({ id: d.id, ...d.data() }));
+                document.getElementById('count-active').innerText = allUserOrders.filter(o => o.workflowStep < 7).length;
+                document.getElementById('count-all').innerText = allUserOrders.length;
+                window.filterMyOrders('active');
+            } catch(e) { console.error(e); }
+        }
+
+        window.filterMyOrders = (type) => {
+            const container = document.getElementById('myOrdersList');
+            container.innerHTML = '';
+            const list = type === 'active' ? allUserOrders.filter(o => o.workflowStep < 7) : allUserOrders;
+
+            if(list.length === 0) {
+                container.innerHTML = '<div class="col-span-full py-10 text-center text-slate-400 font-bold border-2 border-dashed border-sky-100 rounded-3xl">ไม่พบรายการคำสั่งซื้อ</div>';
+                return;
+            }
+
+            list.forEach(b => {
+                const currentStep = b.workflowStep || 1;
+                const trackHtml = WORKFLOW_STEPS.map((s, idx) => {
+                    const cls = currentStep > s.step ? 'done' : (currentStep === s.step ? 'current' : '');
+                    const icon = currentStep > s.step ? '<i class="fa-solid fa-check"></i>' : (idx + 1);
+                    return `
+                        <div class="status-step ${cls}">
+                            <div class="status-dot">${icon}</div>
+                            <span class="status-label">${s.label}</span>
+                        </div>`;
+                }).join('');
+
+                let linkBtn = '';
+                if(b.externalDriveUrl) {
+                    linkBtn = `<a href="${b.externalDriveUrl}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm mt-3"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> เปิดลิงก์ดาวน์โหลดรูปภาพ</a>`;
+                }
+
+                container.innerHTML += `
+                    <div class="glass p-5 rounded-3xl border-white shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-start mb-3">
+                                <span class="text-[10px] font-black px-2.5 py-1 rounded-lg ${b.isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.isPaid ? 'ชำระแล้ว' : 'รอชำระเงิน'}</span>
+                                <span class="text-[10px] font-bold text-slate-400">${b.bookDate || '-'}</span>
+                            </div>
+                            <h4 class="font-black text-slate-900 text-sm mb-1">${b.productName}</h4>
+                            <p class="text-xl font-black text-sky-600 mb-4">${b.price} ฿</p>
+                            
+                            <div class="status-track my-4" style="--steps:7;">${trackHtml}</div>
+                        </div>
+                        ${linkBtn}
+                    </div>`;
+            });
+            renderIcons();
+        };
+
+        // 6. Admin Center (Firestore Only)
+        window.toggleAdminDashboard = () => {
+            const adminSec = document.getElementById('adminSec');
+            const custSec = document.getElementById('customerDashboardSec');
+            if(adminSec.classList.contains('hidden')) {
+                adminSec.classList.remove('hidden');
+                custSec.classList.add('hidden');
+                window.loadAdminData();
+            } else {
+                adminSec.classList.add('hidden');
+                custSec.classList.remove('hidden');
+            }
+            renderIcons();
+        };
+
+        window.switchAdminTab = (tab) => {
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            if(tab === 'queue') {
+                document.getElementById('tabBtnQueue').classList.add('active');
+                document.getElementById('adminTabQueue').classList.remove('hidden');
+                document.getElementById('adminTabPayment').classList.add('hidden');
+            } else {
+                document.getElementById('tabBtnPayment').classList.add('active');
+                document.getElementById('adminTabPayment').classList.remove('hidden');
+                document.getElementById('adminTabQueue').classList.add('hidden');
+            }
+        };
+
+        window.loadAdminData = async () => {
+            try {
+                // Load Staffs
+                const stSnap = await getDocs(query(collection(db, "staffs")));
+                const stSelect = document.getElementById('activeStaffSelect');
+                const stList = document.getElementById('adm_staffList');
+                stSelect.innerHTML = '<option value="">-- กรุณาเลือก --</option>';
+                stList.innerHTML = '';
+                stSnap.forEach(d => {
+                    const st = d.data();
+                    stSelect.innerHTML += `<option value="${st.name}">${st.name}</option>`;
+                    stList.innerHTML += `<div class="flex justify-between items-center p-2.5 bg-white rounded-xl border border-slate-100 text-xs font-bold"><span>${st.name}</span><button onclick="window.deleteStaff('${d.id}')" class="text-rose-500 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button></div>`;
+                });
+
+                // Load Products for Admin
+                const pSnap = await getDocs(query(collection(db, "products")));
+                const pList = document.getElementById('adm_pList');
+                const walkinSelect = document.getElementById('walkin_prod_select');
+                pList.innerHTML = '';
+                walkinSelect.innerHTML = '';
+                pSnap.forEach(d => {
+                    const p = d.data();
+                    pList.innerHTML += `<div class="flex justify-between items-center p-2.5 bg-white rounded-xl border border-slate-100 text-xs font-bold"><span>${p.name} (${p.price} ฿)</span><button onclick="window.deleteProduct('${d.id}')" class="text-rose-500 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button></div>`;
+                    walkinSelect.innerHTML += `<option value="${p.id}" data-name="${p.name}" data-price="${p.price}">${p.name} - ${p.price} ฿</option>`;
+                });
+
+                // Load Bookings
+                const bSnap = await getDocs(query(collection(db, "bookings"), orderBy("timestamp", "desc")));
+                const queueTable = document.getElementById('adm_queueTable');
+                const payTable = document.getElementById('adm_payTable');
+                queueTable.innerHTML = ''; payTable.innerHTML = '';
+
+                let rev = 0, today = 0, wait = 0, receipts = 0;
+                window.excelData = [];
+
+                bSnap.forEach(d => {
+                    const b = d.data();
+                    const id = d.id;
+                    if(b.isPaid) { rev += b.price; receipts++; }
+                    else wait++;
+
+                    window.excelData.push({
+                        "ชื่อลูกค้า": b.customerName, "เบอร์โทร": b.customerPhone || '-',
+                        "แพ็กเกจ": b.productName, "ราคา": b.price, "วันนัด": b.bookDate,
+                        "สถานะ": b.status, "เลขใบเสร็จ": b.receiptNo || '-', "ลิงก์ภาพ": b.externalDriveUrl || '-'
+                    });
+
+                    // Queue Row
+                    const stepOptions = WORKFLOW_STEPS.map(s => `<option value="${s.step}" ${b.workflowStep === s.step ? 'selected' : ''}>${s.step}. ${s.label}</option>`).join('');
+                    queueTable.innerHTML += `
+                        <tr class="hover:bg-slate-50 border-b border-slate-100">
+                            <td class="p-3.5 font-bold text-sky-700">${b.bookDate || '-'}</td>
+                            <td class="p-3.5"><p class="font-bold text-slate-900">${b.customerName}</p><p class="text-[10px] text-slate-400">${b.customerPhone || '-'}</p></td>
+                            <td class="p-3.5 font-bold">${b.productName}</td>
+                            <td class="p-3.5 text-center">
+                                <select onchange="window.updateWorkflow('${id}', this.value)" class="p-1.5 rounded-lg border border-slate-200 text-xs font-bold outline-none bg-white">
+                                    ${stepOptions}
+                                </select>
+                            </td>
+                            <td class="p-3.5 text-right">
+                                <button onclick="window.deleteBooking('${id}')" class="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </td>
+                        </tr>`;
+
+                    // Pay Row
+                    let payAction = b.isPaid 
+                        ? `<button onclick="window.addLinkAdmin('${id}')" class="bg-sky-50 text-sky-700 border border-sky-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-100"><i data-lucide="link" class="w-3.5 h-3.5 inline"></i> แนบลิงก์ภาพ</button>`
+                        : `<button onclick="window.confirmPayAdmin('${id}')" class="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-500">รับชำระเงิน</button>`;
+
+                    payTable.innerHTML += `
+                        <tr class="hover:bg-slate-50 border-b border-slate-100">
+                            <td class="p-3.5 font-bold">${b.customerName}</td>
+                            <td class="p-3.5 font-black text-sky-600">${b.price} ฿</td>
+                            <td class="p-3.5 text-center"><span class="px-2 py-1 rounded text-[10px] font-black ${b.isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.isPaid ? (b.receiptNo || 'ชำระแล้ว') : 'รอชำระ'}</span></td>
+                            <td class="p-3.5 text-right">${payAction}</td>
+                        </tr>`;
+                });
+
+                document.getElementById('statRev').innerText = rev.toLocaleString();
+                document.getElementById('statWait').innerText = wait;
+                document.getElementById('statReceipt').innerText = receipts;
+                renderIcons();
+            } catch(e) { console.error(e); }
+        };
+
+        window.updateWorkflow = async (id, step) => {
+            const s = parseInt(step);
+            const label = WORKFLOW_STEPS.find(i => i.step === s)?.label || '-';
+            await updateDoc(doc(db, "bookings", id), {
+                workflowStep: s,
+                workflowLabel: label,
+                status: label,
+                updatedAt: serverTimestamp()
+            });
+            window.loadAdminData();
+        };
+
+        window.confirmPayAdmin = async (id) => {
+            const staff = document.getElementById('activeStaffSelect').value;
+            if(!staff) return alert("กรุณาเลือกผู้รับเงินที่แถบด้านบนก่อนครับ");
+
+            const yearBE = new Date().getFullYear() + 543;
+            let receiptNo = `SOD-${Date.now().toString().slice(-4)}/${yearBE}`;
+
+            await updateDoc(doc(db, "bookings", id), {
+                isPaid: true,
+                staffId: staff,
+                receiptNo: receiptNo,
+                receiptDate: new Date().toLocaleDateString('th-TH'),
+                workflowStep: 3,
+                workflowLabel: "ถ่ายภาพแล้ว",
+                status: "ถ่ายภาพแล้ว (ชำระเงินเรียบร้อย)",
+                updatedAt: serverTimestamp()
+            });
+            alert(`รับชำระเงินสำเร็จ! เลขที่ใบเสร็จ: ${receiptNo}`);
+            window.loadAdminData();
+        };
+
+        window.addLinkAdmin = async (id) => {
+            const link = prompt("วางลิงก์ Google Drive / โฟลเดอร์รูปภาพของลูกค้า:");
+            if(!link) return;
+            if(!/^https?:\/\//i.test(link)) return alert("ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://");
+
+            await updateDoc(doc(db, "bookings", id), {
+                externalDriveUrl: link,
+                workflowStep: 6,
+                workflowLabel: "พร้อมส่งภาพ",
+                status: "พร้อมส่งภาพ",
+                updatedAt: serverTimestamp()
+            });
+            alert("บันทึกลิงก์ดาวน์โหลดรูปภาพสำเร็จ!");
+            window.loadAdminData();
+        };
+
+        // 7. Product & Staff Creation (Firestore Only)
+        window.addProductAdmin = async () => {
+            const name = document.getElementById('adm_pname').value.trim();
+            const desc = document.getElementById('adm_pdesc').value.trim();
+            const price = parseInt(document.getElementById('adm_pprice').value) || 0;
+            if(!name || !price) return alert("กรุณากรอกชื่อและราคา");
+
+            await addDoc(collection(db, "products"), {
+                name, desc, price,
+                isCombo: document.getElementById('adm_isCombo').checked,
+                createdAt: serverTimestamp()
+            });
+            alert("เพิ่มสินค้าสำเร็จ");
+            document.getElementById('adm_pname').value = '';
+            document.getElementById('adm_pdesc').value = '';
+            document.getElementById('adm_pprice').value = '';
+            window.loadAdminData();
+        };
+        window.deleteProduct = async (id) => { if(confirm("ลบสินค้านี้?")) { await deleteDoc(doc(db, "products", id)); window.loadAdminData(); } };
+
+        window.addStaffAdmin = async () => {
+            const name = document.getElementById('adm_staff_name').value.trim();
+            if(!name) return alert("กรุณากรอกชื่อเจ้าหน้าที่");
+            await addDoc(collection(db, "staffs"), { name, createdAt: serverTimestamp() });
+            alert("เพิ่มรายชื่อเจ้าหน้าที่สำเร็จ");
+            document.getElementById('adm_staff_name').value = '';
+            window.loadAdminData();
+        };
+        window.deleteStaff = async (id) => { if(confirm("ลบรายชื่อนี้?")) { await deleteDoc(doc(db, "staffs", id)); window.loadAdminData(); } };
+        window.deleteBooking = async (id) => { if(confirm("ลบรายการจองนี้?")) { await deleteDoc(doc(db, "bookings", id)); window.loadAdminData(); } };
+
+        // 8. Walk-in POS
+        window.openAdminWalkInModal = () => {
+            walkInCart = [];
+            document.getElementById('walkin_name').value = '';
+            document.getElementById('walkin_email').value = '';
+            document.getElementById('walkin_phone').value = '';
+            renderWalkInCart();
+            document.getElementById('adminWalkInModal')?.classList.add('active');
+        };
+
+        window.addWalkInProduct = () => {
+            const sel = document.getElementById('walkin_prod_select');
+            const opt = sel.options[sel.selectedIndex];
+            if(!opt) return;
+            walkInCart.push({ id: opt.value, name: opt.dataset.name, price: parseInt(opt.dataset.price) });
+            renderWalkInCart();
+        };
+
+        function renderWalkInCart() {
+            const list = document.getElementById('walkinCartList');
+            let total = 0;
+            list.innerHTML = walkInCart.map((i, idx) => {
+                total += i.price;
+                return `<div class="flex justify-between items-center"><span>${i.name} (${i.price} ฿)</span><button onclick="window.removeWalkInCart(${idx})" class="text-rose-500 font-bold">ลบ</button></div>`;
+            }).join('');
+            document.getElementById('walkinTotal').innerText = total.toLocaleString();
+        }
+        window.removeWalkInCart = (idx) => { walkInCart.splice(idx, 1); renderWalkInCart(); };
+
+        window.submitWalkInBooking = async () => {
+            const name = document.getElementById('walkin_name').value.trim();
+            const email = document.getElementById('walkin_email').value.trim();
+            if(!name || !email) return alert("กรุณากรอกชื่อและอีเมลลูกค้า");
+            if(walkInCart.length === 0) return alert("กรุณาเลือกสินค้าอย่างน้อย 1 รายการ");
+
+            const isPaid = document.getElementById('walkin_paid').checked;
+            const staff = document.getElementById('activeStaffSelect').value || 'เจ้าหน้าที่โสตฯ';
+            const total = walkInCart.reduce((sum, i) => sum + i.price, 0);
+            const yearBE = new Date().getFullYear() + 543;
+
+            await addDoc(collection(db, "bookings"), {
+                userId: `walkin_${Date.now()}`,
+                customerName: name,
+                customerEmail: email.toLowerCase(),
+                customerPhone: document.getElementById('walkin_phone').value.trim() || '-',
+                studentId: document.getElementById('walkin_sid').value.trim() || '-',
+                studentClass: document.getElementById('walkin_class').value.trim() || '-',
+                productName: walkInCart.map(i => i.name).join(' + '),
+                price: total,
+                bookDate: new Date().toLocaleDateString('th-TH'),
+                status: isPaid ? "ถ่ายภาพแล้ว (ชำระเงินเรียบร้อย)" : "รอชำระเงิน",
+                workflowStep: isPaid ? 3 : 1,
+                workflowLabel: isPaid ? "ถ่ายภาพแล้ว" : "สั่งสินค้า",
+                isPaid: isPaid,
+                staffId: isPaid ? staff : '-',
+                receiptNo: isPaid ? `SOD-${Date.now().toString().slice(-4)}/${yearBE}` : '-',
+                receiptDate: isPaid ? new Date().toLocaleDateString('th-TH') : '-',
+                timestamp: serverTimestamp()
+            });
+
+            alert("บันทึกคำสั่งซื้อ Walk-in สำเร็จ!");
+            window.closeModal('adminWalkInModal');
+            window.loadAdminData();
+        };
+
+        // 9. Announcement Popup
+        window.openPopupSettingsModal = async () => {
+            const snap = await getDoc(doc(db, "system", "welcomePopup"));
+            if(snap.exists()) {
+                const d = snap.data();
+                document.getElementById('pop_enabled').checked = d.enabled;
+                document.getElementById('pop_title').value = d.title || '';
+                document.getElementById('pop_msg').value = d.message || '';
+            }
+            document.getElementById('popupSettingsModal')?.classList.add('active');
+        };
+
+        window.savePopupSettingsAdmin = async () => {
+            await setDoc(doc(db, "system", "welcomePopup"), {
+                enabled: document.getElementById('pop_enabled').checked,
+                title: document.getElementById('pop_title').value.trim(),
+                message: document.getElementById('pop_msg').value.trim(),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            alert("บันทึกการตั้งค่าประกาศเรียบร้อย");
+            window.closeModal('popupSettingsModal');
+        };
+
+        async function loadWelcomePopup() {
+            const snap = await getDoc(doc(db, "system", "welcomePopup"));
+            if(snap.exists()) {
+                const d = snap.data();
+                if(d.enabled && !sessionStorage.getItem('popupShown')) {
+                    document.getElementById('popupTextTitle').innerText = d.title || "ประกาศจากทีมโสตฯ";
+                    document.getElementById('popupTextMessage').innerText = d.message || "";
+                    document.getElementById('welcomePopupModal')?.classList.add('active');
+                    sessionStorage.setItem('popupShown', 'true');
+                }
+            }
+        }
+
+        // 10. Export Excel
+        window.exportToExcel = () => {
+            if(!window.excelData || window.excelData.length === 0) return alert("ไม่มีข้อมูลในตาราง");
+            const ws = XLSX.utils.json_to_sheet(window.excelData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "SodWSK_Report");
+            XLSX.writeFile(wb, `Report_SodWSK_${Date.now()}.xlsx`);
+        };
+    </script>
+</body>
+</html>
